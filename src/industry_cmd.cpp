@@ -2462,20 +2462,13 @@ void IndustryBuildData::TryBuildNewIndustry()
 }
 
 /**
- * Protects an industry from closure if the appropriate flags and conditions are met
- * INDUSTRYBEH_CANCLOSE_LASTINSTANCE must be set (which, by default, it is not) and the
- * count of industries of this type must one (or lower) in order to be protected
- * against closure.
+ * All industries are always protected from closure.
  * @param type IndustryType been queried
  * @result true if protection is on, false otherwise (except for oil wells)
  */
 static bool CheckIndustryCloseDownProtection(IndustryType type)
 {
-	const IndustrySpec *indspec = GetIndustrySpec(type);
-
-	/* oil wells (or the industries with that flag set) are always allowed to closedown */
-	if ((indspec->behaviour & INDUSTRYBEH_DONT_INCR_PROD) && _settings_game.game_creation.landscape == LT_TEMPERATE) return false;
-	return (indspec->behaviour & INDUSTRYBEH_CANCLOSE_LASTINSTANCE) == 0 && Industry::GetIndustryTypeCount(type) <= 1;
+	return true;
 }
 
 /**
@@ -2829,16 +2822,12 @@ void IndustryDailyLoop()
 	if ((_industry_builder.wanted_inds >> 16) > GetCurrentTotalNumberOfIndustries()) {
 		perc = min(9u, perc + (_industry_builder.wanted_inds >> 16) - GetCurrentTotalNumberOfIndustries());
 	}
-	for (uint16 j = 0; j < change_loop; j++) {
-		if (Chance16(perc, 100)) {
-			_industry_builder.TryBuildNewIndustry();
-		} else {
-			Industry *i = Industry::GetRandom();
-			if (i != nullptr) {
-				ChangeIndustryProduction(i, false);
-				SetWindowDirty(WC_INDUSTRY_VIEW, i->index);
-			}
-		}
+	for (uint16 j = 0; j < change_loop; j++) {		
+		Industry *i = Industry::GetRandom();
+		if (i != nullptr) {
+			ChangeIndustryProduction(i, false);
+			SetWindowDirty(WC_INDUSTRY_VIEW, i->index);
+		}		
 	}
 
 	cur_company.Restore();
