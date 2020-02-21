@@ -661,89 +661,89 @@ static void TileLoop_Trees(TileIndex tile)
 	}
 	SetTreeCounter(tile, 0);
 
-	switch (GetTreeGrowth(tile)) {
-		case 3: // regular sized tree
-			if (_settings_game.game_creation.landscape == LT_TROPIC &&
-					GetTreeType(tile) != TREE_CACTUS &&
-					GetTropicZone(tile) == TROPICZONE_DESERT) {
-				AddTreeGrowth(tile, 1);
-			} else {
-				switch (GB(Random(), 0, 3)) {
-					case 0: // start destructing
-						AddTreeGrowth(tile, 1);
-						break;
+	//switch (GetTreeGrowth(tile)) {
+	//	case 3: // regular sized tree
+	//		if (_settings_game.game_creation.landscape == LT_TROPIC &&
+	//				GetTreeType(tile) != TREE_CACTUS &&
+	//				GetTropicZone(tile) == TROPICZONE_DESERT) {
+	//			AddTreeGrowth(tile, 1);
+	//		} else {
+	//			switch (GB(Random(), 0, 3)) {
+	//				case 0: // start destructing
+	//					AddTreeGrowth(tile, 1);
+	//					break;
 
-					case 1: // add a tree
-						if (GetTreeCount(tile) < 4) {
-							AddTreeCount(tile, 1);
-							SetTreeGrowth(tile, 0);
-							break;
-						}
-						FALLTHROUGH;
+	//				case 1: // add a tree
+	//					if (GetTreeCount(tile) < 4) {
+	//						AddTreeCount(tile, 1);
+	//						SetTreeGrowth(tile, 0);
+	//						break;
+	//					}
+	//					FALLTHROUGH;
 
-					case 2: { // add a neighbouring tree
-						/* Don't plant extra trees if that's not allowed. */
-						if ((_settings_game.game_creation.landscape == LT_TROPIC && GetTropicZone(tile) == TROPICZONE_RAINFOREST) ?
-								_settings_game.construction.extra_tree_placement == ETP_NONE :
-								_settings_game.construction.extra_tree_placement != ETP_ALL) {
-							break;
-						}
+	//				case 2: { // add a neighbouring tree
+	//					/* Don't plant extra trees if that's not allowed. */
+	//					if ((_settings_game.game_creation.landscape == LT_TROPIC && GetTropicZone(tile) == TROPICZONE_RAINFOREST) ?
+	//							_settings_game.construction.extra_tree_placement == ETP_NONE :
+	//							_settings_game.construction.extra_tree_placement != ETP_ALL) {
+	//						break;
+	//					}
 
-						TreeType treetype = GetTreeType(tile);
+	//					TreeType treetype = GetTreeType(tile);
 
-						tile += TileOffsByDir((Direction)(Random() & 7));
+	//					tile += TileOffsByDir((Direction)(Random() & 7));
 
-						/* Cacti don't spread */
-						if (!CanPlantTreesOnTile(tile, false)) return;
+	//					/* Cacti don't spread */
+	//					if (!CanPlantTreesOnTile(tile, false)) return;
 
-						/* Don't plant trees, if ground was freshly cleared */
-						if (IsTileType(tile, MP_CLEAR) && GetClearGround(tile) == CLEAR_GRASS && GetClearDensity(tile) != 3) return;
+	//					/* Don't plant trees, if ground was freshly cleared */
+	//					if (IsTileType(tile, MP_CLEAR) && GetClearGround(tile) == CLEAR_GRASS && GetClearDensity(tile) != 3) return;
 
-						PlantTreesOnTile(tile, treetype, 0, 0);
+	//					PlantTreesOnTile(tile, treetype, 0, 0);
 
-						break;
-					}
+	//					break;
+	//				}
 
-					default:
-						return;
-				}
-			}
-			break;
+	//				default:
+	//					return;
+	//			}
+	//		}
+	//		break;
 
-		case 6: // final stage of tree destruction
-			if (GetTreeCount(tile) > 1) {
-				/* more than one tree, delete it */
-				AddTreeCount(tile, -1);
-				SetTreeGrowth(tile, 3);
-			} else {
-				/* just one tree, change type into MP_CLEAR */
-				switch (GetTreeGround(tile)) {
-					case TREE_GROUND_SHORE: MakeShore(tile); break;
-					case TREE_GROUND_GRASS: MakeClear(tile, CLEAR_GRASS, GetTreeDensity(tile)); break;
-					case TREE_GROUND_ROUGH: MakeClear(tile, CLEAR_ROUGH, 3); break;
-					case TREE_GROUND_ROUGH_SNOW: {
-						uint density = GetTreeDensity(tile);
-						MakeClear(tile, CLEAR_ROUGH, 3);
-						MakeSnow(tile, density);
-						break;
-					}
-					default: // snow or desert
-						if (_settings_game.game_creation.landscape == LT_TROPIC) {
-							MakeClear(tile, CLEAR_DESERT, GetTreeDensity(tile));
-						} else {
-							uint density = GetTreeDensity(tile);
-							MakeClear(tile, CLEAR_GRASS, 3);
-							MakeSnow(tile, density);
-						}
-						break;
-				}
-			}
-			break;
+	//	case 6: // final stage of tree destruction
+	//		if (GetTreeCount(tile) > 1) {
+	//			/* more than one tree, delete it */
+	//			AddTreeCount(tile, -1);
+	//			SetTreeGrowth(tile, 3);
+	//		} else {
+	//			/* just one tree, change type into MP_CLEAR */
+	//			switch (GetTreeGround(tile)) {
+	//				case TREE_GROUND_SHORE: MakeShore(tile); break;
+	//				case TREE_GROUND_GRASS: MakeClear(tile, CLEAR_GRASS, GetTreeDensity(tile)); break;
+	//				case TREE_GROUND_ROUGH: MakeClear(tile, CLEAR_ROUGH, 3); break;
+	//				case TREE_GROUND_ROUGH_SNOW: {
+	//					uint density = GetTreeDensity(tile);
+	//					MakeClear(tile, CLEAR_ROUGH, 3);
+	//					MakeSnow(tile, density);
+	//					break;
+	//				}
+	//				default: // snow or desert
+	//					if (_settings_game.game_creation.landscape == LT_TROPIC) {
+	//						MakeClear(tile, CLEAR_DESERT, GetTreeDensity(tile));
+	//					} else {
+	//						uint density = GetTreeDensity(tile);
+	//						MakeClear(tile, CLEAR_GRASS, 3);
+	//						MakeSnow(tile, density);
+	//					}
+	//					break;
+	//			}
+	//		}
+	//		break;
 
-		default:
-			AddTreeGrowth(tile, 1);
-			break;
-	}
+	//	default:
+	//		AddTreeGrowth(tile, 1);
+	//		break;
+	//}
 
 	MarkTileDirtyByTile(tile);
 }
