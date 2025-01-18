@@ -2662,23 +2662,6 @@ void IndustryBuildData::TryBuildNewIndustry()
 }
 
 /**
- * Protects an industry from closure if the appropriate flags and conditions are met
- * INDUSTRYBEH_CANCLOSE_LASTINSTANCE must be set (which, by default, it is not) and the
- * count of industries of this type must one (or lower) in order to be protected
- * against closure.
- * @param type IndustryType been queried
- * @result true if protection is on, false otherwise (except for oil wells)
- */
-static bool CheckIndustryCloseDownProtection(IndustryType type)
-{
-	const IndustrySpec *indspec = GetIndustrySpec(type);
-
-	/* oil wells (or the industries with that flag set) are always allowed to closedown */
-	if ((indspec->behaviour & INDUSTRYBEH_DONT_INCR_PROD) && _settings_game.game_creation.landscape == LT_TEMPERATE) return false;
-	return (indspec->behaviour & INDUSTRYBEH_CANCLOSE_LASTINSTANCE) == 0 && Industry::GetIndustryTypeCount(type) <= 1;
-}
-
-/**
  * Can given cargo type be accepted or produced by the industry?
  * @param cargo: Cargo type
  * @param ind: Industry
@@ -2795,7 +2778,6 @@ static const uint PERCENT_TRANSPORTED_80 = 204;
 static void ChangeIndustryProduction(Industry *i, bool monthly)
 {
 	StringID str = STR_NULL;
-	bool closeit = false;
 	const IndustrySpec *indspec = GetIndustrySpec(i->type);
 	bool standard = false;
 	bool suppress_message = false;
@@ -2819,7 +2801,7 @@ static void ChangeIndustryProduction(Industry *i, bool monthly)
 				case 0x0: break;                  // Do nothing, but show the custom message if any
 				case 0x1: div = 1; break;         // Halve industry production. If production reaches the quarter of the default, the industry is closed instead.
 				case 0x2: mul = 1; break;         // Double industry production if it hasn't reached eight times of the original yet.
-				case 0x3: closeit = true; break;  // The industry announces imminent closure, and is physically removed from the map next month.
+				case 0x3: break;                  // Industry closure is removed.
 				case 0x4: standard = true; break; // Do the standard random production change as if this industry was a primary one.
 				case 0x5: case 0x6: case 0x7:     // Divide production by 4, 8, 16
 				case 0x8: div = res - 0x3; break; // Divide production by 32
@@ -2855,7 +2837,6 @@ static void ChangeIndustryProduction(Industry *i, bool monthly)
 				}
 			}
 		} else if (_settings_game.economy.type == ET_SMOOTH) {
-			closeit = !(i->ctlflags & (INDCTL_NO_CLOSURE | INDCTL_NO_PRODUCTION_DECREASE));
 			for (auto &p : i->produced) {
 				if (!IsValidCargoID(p.cargo)) continue;
 				uint32_t r = Random();
@@ -2893,15 +2874,11 @@ static void ChangeIndustryProduction(Industry *i, bool monthly)
 
 				/* Do not stop closing the industry when it has the lowest possible production rate */
 				if (new_prod == old_prod && old_prod > 1) {
-					closeit = false;
 					continue;
 				}
 
 				percent = (old_prod == 0) ? 100 : (new_prod * 100 / old_prod - 100);
 				p.rate = new_prod;
-
-				/* Close the industry when it has the lowest possible production rate */
-				if (new_prod > 1) closeit = false;
 
 				if (abs(percent) >= 10) {
 					ReportNewsProductionChangeIndustry(i, p.cargo, percent);
@@ -2919,12 +2896,6 @@ static void ChangeIndustryProduction(Industry *i, bool monthly)
 		increment = 0;
 	}
 
-	if (!callback_enabled && (indspec->life_type & INDUSTRYLIFE_PROCESSING)) {
-		if (TimerGameEconomy::year - i->last_prod_year >= PROCESSING_INDUSTRY_ABANDONMENT_YEARS && Chance16(1, original_economy ? 2 : 180)) {
-			closeit = true;
-		}
-	}
-
 	/* Increase if needed */
 	while (mul-- != 0 && i->prod_level < PRODLEVEL_MAXIMUM) {
 		i->prod_level = std::min<int>(i->prod_level * 2, PRODLEVEL_MAXIMUM);
@@ -2933,9 +2904,8 @@ static void ChangeIndustryProduction(Industry *i, bool monthly)
 	}
 
 	/* Decrease if needed */
-	while (div-- != 0 && !closeit) {
+	while (div-- != 0) {
 		if (i->prod_level == PRODLEVEL_MINIMUM) {
-			closeit = true;
 			break;
 		} else {
 			i->prod_level = std::max<int>(i->prod_level / 2, PRODLEVEL_MINIMUM);
@@ -2946,58 +2916,33 @@ static void ChangeIndustryProduction(Industry *i, bool monthly)
 
 	/* Increase or Decreasing the production level if needed */
 	if (increment != 0) {
-		if (increment < 0 && i->prod_level == PRODLEVEL_MINIMUM) {
-			closeit = true;
-		} else {
-			i->prod_level = ClampU(i->prod_level + increment, PRODLEVEL_MINIMUM, PRODLEVEL_MAXIMUM);
-			recalculate_multipliers = true;
-		}
+		i->prod_level = ClampU(i->prod_level + increment, PRODLEVEL_MINIMUM, PRODLEVEL_MAXIMUM);
+		recalculate_multipliers = true;
 	}
 
 	/* Recalculate production_rate
 	 * For non-smooth economy these should always be synchronized with prod_level */
 	if (recalculate_multipliers) i->RecomputeProductionMultipliers();
 
-	/* Close if needed and allowed */
-	if (closeit && !CheckIndustryCloseDownProtection(i->type) && !(i->ctlflags & INDCTL_NO_CLOSURE)) {
-		i->prod_level = PRODLEVEL_CLOSURE;
-		SetWindowDirty(WC_INDUSTRY_VIEW, i->index);
-		str = indspec->closure_text;
-	}
-
 	if (!suppress_message && str != STR_NULL) {
 		NewsType nt;
 		/* Compute news category */
-		if (closeit) {
-			nt = NT_INDUSTRY_CLOSE;
-			AI::BroadcastNewEvent(new ScriptEventIndustryClose(i->index));
-			Game::NewEvent(new ScriptEventIndustryClose(i->index));
-		} else {
-			switch (WhoCanServiceIndustry(i)) {
-				case 0: nt = NT_INDUSTRY_NOBODY;  break;
-				case 1: nt = NT_INDUSTRY_OTHER;   break;
-				case 2: nt = NT_INDUSTRY_COMPANY; break;
-				default: NOT_REACHED();
-			}
+		switch (WhoCanServiceIndustry(i)) {
+			case 0: nt = NT_INDUSTRY_NOBODY;  break;
+			case 1: nt = NT_INDUSTRY_OTHER;   break;
+			case 2: nt = NT_INDUSTRY_COMPANY; break;
+			default: NOT_REACHED();
 		}
 		/* Set parameters of news string */
 		if (str > STR_LAST_STRINGID) {
 			SetDParam(0, STR_TOWN_NAME);
 			SetDParam(1, i->town->index);
 			SetDParam(2, indspec->name);
-		} else if (closeit) {
-			SetDParam(0, STR_FORMAT_INDUSTRY_NAME);
-			SetDParam(1, i->town->index);
-			SetDParam(2, indspec->name);
 		} else {
 			SetDParam(0, i->index);
 		}
 		/* and report the news to the user */
-		if (closeit) {
-			AddTileNewsItem(str, nt, i->location.tile + TileDiffXY(1, 1));
-		} else {
-			AddIndustryNewsItem(str, nt, i->index);
-		}
+		AddIndustryNewsItem(str, nt, i->index);
 	}
 }
 
@@ -3028,19 +2973,11 @@ static IntervalTimer<TimerGameEconomy> _economy_industries_daily({TimerGameEcono
 
 	/* perform the required industry changes for the day */
 
-	uint perc = 3; // Between 3% and 9% chance of creating a new industry.
-	if ((_industry_builder.wanted_inds >> 16) > GetCurrentTotalNumberOfIndustries()) {
-		perc = std::min(9u, perc + (_industry_builder.wanted_inds >> 16) - GetCurrentTotalNumberOfIndustries());
-	}
 	for (uint16_t j = 0; j < change_loop; j++) {
-		if (Chance16(perc, 100)) {
-			_industry_builder.TryBuildNewIndustry();
-		} else {
-			Industry *i = Industry::GetRandom();
-			if (i != nullptr) {
-				ChangeIndustryProduction(i, false);
-				SetWindowDirty(WC_INDUSTRY_VIEW, i->index);
-			}
+		Industry *i = Industry::GetRandom();
+		if (i != nullptr) {
+			ChangeIndustryProduction(i, false);
+			SetWindowDirty(WC_INDUSTRY_VIEW, i->index);
 		}
 	}
 
