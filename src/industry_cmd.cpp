@@ -2839,6 +2839,7 @@ static void ChangeIndustryProduction(Industry *i, bool monthly)
 		} else if (_settings_game.economy.type == ET_SMOOTH) {
 			for (auto &p : i->produced) {
 				if (!IsValidCargoID(p.cargo)) continue;
+				if (p.history[LAST_MONTH].PctTransported() == 0) continue;
 				uint32_t r = Random();
 				int old_prod, new_prod, percent;
 				/* If over 60% is transported, mult is 1, else mult is -1. */
